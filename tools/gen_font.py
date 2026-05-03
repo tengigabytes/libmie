@@ -106,6 +106,9 @@ MANDATORY_RANGES = [
     (0x00A0, 0x00FF),   # Latin-1 Supplement (° ± × ÷ © etc.)
     (0x02B0, 0x02FF),   # Spacing Modifier Letters (Bopomofo tones ˊˇˋ˙)
     (0x2000, 0x206F),   # General Punctuation (— … etc.)
+    (0x2190, 0x21FF),   # Arrows (← ↑ → ↓ etc.) — used by hw_diag_view hints
+    (0x25A0, 0x25FF),   # Geometric Shapes (◀ ▶ ■ etc.) — focus markers
+    (0x2700, 0x27BF),   # Dingbats (✓ ✗ etc.) — checkmarks in pickers
     (0x3000, 0x303F),   # CJK Symbols & Punctuation
     (0x3100, 0x312F),   # Bopomofo letters
     (0x31A0, 0x31BF),   # Bopomofo Extended
