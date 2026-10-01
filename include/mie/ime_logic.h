@@ -44,6 +44,16 @@
 #include <mie/lru_cache.h>
 #include <mie/trie_searcher.h>
 
+// Compile-time override for ImeLogic::kMaxCandidates (default 100, sized for
+// MokyaLora Core 1's RAM budget). The value changes sizeof(ImeLogic) and the
+// size of several static search buffers, so it MUST be identical in the
+// library and in every translation unit that includes this header — set it
+// through the CMake cache variable MIE_MAX_CANDIDATES (applied as a PUBLIC
+// compile definition), not per-file.
+#ifndef MIE_MAX_CANDIDATES
+#define MIE_MAX_CANDIDATES 100
+#endif
+
 namespace mie {
 
 class CompositionSearcher;  // forward decl; see mie/composition_searcher.h
@@ -124,8 +134,10 @@ public:
     // couldn't reach mid-rank chars like 滷 (rank 46) or rare chars like
     // 丼 (rank 71). 100 covers ≥ 90 % of (byte_seq, tone) buckets in the
     // current dict; cost = +1.8 KB per ImeLogic + ~3.6 KB stack per
-    // nested search.
-    static constexpr int      kMaxCandidates     = 100;
+    // nested search. Overridable via MIE_MAX_CANDIDATES (see top of file).
+    static constexpr int      kMaxCandidates     = MIE_MAX_CANDIDATES;
+    static_assert(kMaxCandidates >= kPageSize,
+                  "MIE_MAX_CANDIDATES must hold at least one candidate page");
 
     // Internal buffer limits.
     static constexpr int      kMaxKeySeq         = 64;

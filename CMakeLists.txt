@@ -6,8 +6,24 @@ cmake_minimum_required(VERSION 3.20)
 # and is added by the parent build when targeting a specific platform.
 
 project(mie C CXX)
-set(CMAKE_CXX_STANDARD 11)
+
+# MIE is C++11 so it stays buildable by embedded toolchains (MokyaLora's
+# RP2350 Core 1 build). MIE_CXX_STANDARD lets CI also exercise newer
+# standards; consumers that only include the headers may use any standard
+# >= 11. Set at directory scope, so it also applies to the host tests / REPL.
+set(MIE_CXX_STANDARD 11 CACHE STRING "C++ standard used to build MIE (11, 14, 17, 20)")
+set(CMAKE_CXX_STANDARD ${MIE_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# RAM-sizing overrides. Empty = keep the header defaults (kMaxCandidates =
+# 100, LruCache::kCap = 128), which are what MokyaLora's RP2350 Core 1 is
+# budgeted for. Both values change sizeof(ImeLogic), so they are applied as
+# PUBLIC compile definitions on the `mie` target: every consumer that links
+# `mie` through CMake sees the same value as the library (ODR safety).
+set(MIE_MAX_CANDIDATES "" CACHE STRING
+    "Override ImeLogic::kMaxCandidates (empty = header default 100)")
+set(MIE_LRU_CAP "" CACHE STRING
+    "Override LruCache::kCap (empty = header default 128)")
 
 # MSVC: treat all source files as UTF-8 and suppress code-page warnings
 if(MSVC)
@@ -36,6 +52,13 @@ add_library(mie STATIC
 target_include_directories(mie PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
+if(NOT MIE_MAX_CANDIDATES STREQUAL "")
+    target_compile_definitions(mie PUBLIC MIE_MAX_CANDIDATES=${MIE_MAX_CANDIDATES})
+endif()
+if(NOT MIE_LRU_CAP STREQUAL "")
+    target_compile_definitions(mie PUBLIC MIE_LRU_CAP=${MIE_LRU_CAP})
+endif()
 
 # Host-only targets: REPL + unit tests.
 if(NOT CMAKE_CROSSCOMPILING)

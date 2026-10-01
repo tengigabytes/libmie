@@ -19,6 +19,19 @@
 #include <stdint.h>
 #include <mie/trie_searcher.h>  // for Candidate
 
+// Compile-time capacity override. Default 128 matches MokyaLora Core 1's RAM
+// budget (128 x 48 B = 6 KB of BSS per ImeLogic). Hosts with more RAM may
+// raise it, e.g. -DMIE_LRU_CAP=512. The value changes sizeof(LruCache) and
+// sizeof(ImeLogic), so it MUST be identical in the library and in every
+// translation unit that includes this header — set it through the CMake
+// cache variable MIE_LRU_CAP (applied as a PUBLIC compile definition), not
+// per-file. Persisted LRU1 blobs whose entry count exceeds the reader's
+// capacity are rejected by deserialize(), so a blob written by a larger-cap
+// build does not load on a smaller-cap build once it holds more entries.
+#ifndef MIE_LRU_CAP
+#define MIE_LRU_CAP 128
+#endif
+
 namespace mie {
 
 // 2-bit packed phoneme-position hint. Packs up to kLruPackedPositions byte
@@ -60,7 +73,10 @@ public:
     // Capacity bumped 64 → 128 in Phase 1.6.1 (2026-04-26) after the
     // long-passage analysis showed in-pass repeat lift was capped by
     // window size on >100-char content. See mie-p1.6-lru-plan.md.
-    static constexpr int kCap = 128;
+    // Overridable via MIE_LRU_CAP (see top of file); default 128.
+    static constexpr int kCap = MIE_LRU_CAP;
+    static_assert(kCap > 0 && kCap <= 0xFFFF,
+                  "MIE_LRU_CAP must fit the LRU1 header's u16 entry count");
 
     LruCache() { reset(); }
 
