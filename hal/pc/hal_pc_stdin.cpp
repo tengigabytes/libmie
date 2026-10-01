@@ -20,6 +20,18 @@
 namespace mie {
 namespace pc {
 
+// KeyEvent has a default member initializer (flags = 0), which makes it a
+// non-aggregate under C++11, so `KeyEvent{kc, pressed, now_ms}` only compiles
+// from C++14 on. MIE targets C++11; build events field by field instead.
+static KeyEvent make_key_event(mokya_keycode_t kc, bool pressed, uint32_t now_ms) {
+    KeyEvent ev;
+    ev.keycode = kc;
+    ev.pressed = pressed;
+    ev.now_ms  = now_ms;
+    ev.flags   = 0;
+    return ev;
+}
+
 // ── Platform raw-mode helpers ───────────────────────────────────────────────
 
 #ifdef _WIN32
@@ -122,13 +134,13 @@ bool HalPcStdin::poll(KeyEvent& out, uint32_t now_ms) {
 
     // ESC → caller-signal to quit.
     if (pc_key == KEY_ESCAPE) {
-        out = KeyEvent{MOKYA_KEY_NONE, false, now_ms};
+        out = make_key_event(MOKYA_KEY_NONE, false, now_ms);
         return true;
     }
 
     for (const KeyMapEntry* e = kPcKeyMap; e->pc_key != -1; ++e) {
         if (e->pc_key == pc_key) {
-            out = KeyEvent{e->keycode, true, now_ms};
+            out = make_key_event(e->keycode, true, now_ms);
             return true;
         }
     }

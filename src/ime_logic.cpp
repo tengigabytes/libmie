@@ -10,6 +10,19 @@
 
 namespace mie {
 
+// Out-of-class definitions of the static constexpr members. C++11/14 need
+// them whenever a member is ODR-used (bound to a const&, e.g. by EXPECT_EQ or
+// std::min); C++17 makes such members implicitly inline and deprecates the
+// redundant redeclaration, so only emit them before C++17.
+#if __cplusplus < 201703L
+constexpr uint32_t ImeLogic::kMultiTapTimeoutMs;
+constexpr uint32_t ImeLogic::kLongPressMs;
+constexpr int      ImeLogic::kPageSize;
+constexpr int      ImeLogic::kMaxCandidates;
+constexpr int      ImeLogic::kMaxKeySeq;
+constexpr int      ImeLogic::kMaxDisplayBytes;
+#endif
+
 // ── SYM1 long-press symbol picker (Phase 1.4 Task B) ────────────────────
 // 4-column × 4-row grid of common Traditional-Chinese punctuation that the
 // user can't otherwise type from the half-keyboard. Layout (row-major):
