@@ -125,6 +125,7 @@ Python tool tests: `python -m pytest tests/test_gen_dict.py tools/test_pack_dict
 | `MIE_CXX_STANDARD` | `11` | C++ standard for the library, REPL and tests. |
 | `MIE_MAX_CANDIDATES` | *(empty → 100)* | Overrides `ImeLogic::kMaxCandidates`. |
 | `MIE_LRU_CAP` | *(empty → 128)* | Overrides `LruCache::kCap`. |
+| `MIE_BUILD_HOST_TOOLS` | ON when top-level and not cross-compiling | Build `mie_repl`, the tests and the `mie_data_*` targets. |
 | `MIE_DATA_SOURCES_DIR`, `MIE_UNIFONT_OTF`, `MIE_MOE_CSV` | *(empty)* | Inputs for the optional `mie_data_*` targets. |
 
 `MIE_MAX_CANDIDATES` and `MIE_LRU_CAP` change `sizeof(ImeLogic)`. They are
@@ -139,8 +140,10 @@ add_subdirectory(path/to/libmie)          # e.g. a git submodule
 target_link_libraries(my_target PRIVATE mie)
 ```
 
-When `CMAKE_CROSSCOMPILING` is set (Android NDK, Pico SDK), only the `mie`
-static library is defined; the REPL, tests and data targets are skipped.
+As a subdirectory, or whenever `CMAKE_CROSSCOMPILING` is set (Android NDK,
+Pico SDK), only the `mie` static library is defined; the REPL, tests and
+data targets are skipped (`MIE_BUILD_HOST_TOOLS=OFF`), so the parent build
+does not download GoogleTest.
 
 ---
 
