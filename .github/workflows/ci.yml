@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpp:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Default configuration: C++11, header-default RAM sizes. This is
+          # the configuration MokyaLora's RP2350 Core 1 build relies on.
+          - { name: "gcc / C++11",   cc: gcc,   cxx: g++,     std: 11, extra: "" }
+          - { name: "clang / C++11", cc: clang, cxx: clang++, std: 11, extra: "" }
+          # Newer standard, as used by host consumers (e.g. Android NDK).
+          - { name: "gcc / C++17",   cc: gcc,   cxx: g++,     std: 17, extra: "" }
+          - { name: "clang / C++17", cc: clang, cxx: clang++, std: 17, extra: "" }
+          # RAM-sizing overrides must propagate to every consumer TU.
+          - name: "gcc / C++11 / size overrides"
+            cc: gcc
+            cxx: g++
+            std: 11
+            extra: "-DMIE_MAX_CANDIDATES=200 -DMIE_LRU_CAP=512"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_COMPILER=${{ matrix.cc }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+          -DMIE_CXX_STANDARD=${{ matrix.std }}
+          ${{ matrix.extra }}
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  python:
+    name: Python tools
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pytest
+        run: python -m pip install pytest
+
+      - name: Test gen_dict.py / pack_dict_blob.py
+        run: python -m pytest -q tests/test_gen_dict.py tools/test_pack_dict_blob.py

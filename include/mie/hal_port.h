@@ -25,6 +25,9 @@ namespace mie {
 constexpr uint8_t KEY_FLAG_LONG_PRESS = MOKYA_KEY_FLAG_LONG_PRESS;
 constexpr uint8_t KEY_FLAG_HINT_ANY   = MOKYA_KEY_FLAG_HINT_ANY;
 
+/// Explicit phoneme flag for phoneme index 0..2 (see MOKYA_KEY_FLAG_PHONEME).
+constexpr uint8_t key_flag_phoneme(int idx) { return MOKYA_KEY_FLAG_PHONEME(idx); }
+
 struct KeyEvent {
     mokya_keycode_t keycode;    ///< semantic keycode (see <mie/keycode.h>)
     bool            pressed;    ///< true = key-down, false = key-up

@@ -6,8 +6,24 @@ cmake_minimum_required(VERSION 3.20)
 # and is added by the parent build when targeting a specific platform.
 
 project(mie C CXX)
-set(CMAKE_CXX_STANDARD 11)
+
+# MIE is C++11 so it stays buildable by embedded toolchains (MokyaLora's
+# RP2350 Core 1 build). MIE_CXX_STANDARD lets CI also exercise newer
+# standards; consumers that only include the headers may use any standard
+# >= 11. Set at directory scope, so it also applies to the host tests / REPL.
+set(MIE_CXX_STANDARD 11 CACHE STRING "C++ standard used to build MIE (11, 14, 17, 20)")
+set(CMAKE_CXX_STANDARD ${MIE_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# RAM-sizing overrides. Empty = keep the header defaults (kMaxCandidates =
+# 100, LruCache::kCap = 128), which are what MokyaLora's RP2350 Core 1 is
+# budgeted for. Both values change sizeof(ImeLogic), so they are applied as
+# PUBLIC compile definitions on the `mie` target: every consumer that links
+# `mie` through CMake sees the same value as the library (ODR safety).
+set(MIE_MAX_CANDIDATES "" CACHE STRING
+    "Override ImeLogic::kMaxCandidates (empty = header default 100)")
+set(MIE_LRU_CAP "" CACHE STRING
+    "Override LruCache::kCap (empty = header default 128)")
 
 # MSVC: treat all source files as UTF-8 and suppress code-page warnings
 if(MSVC)
@@ -37,8 +53,28 @@ target_include_directories(mie PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Host-only targets: REPL + unit tests.
-if(NOT CMAKE_CROSSCOMPILING)
+if(NOT MIE_MAX_CANDIDATES STREQUAL "")
+    target_compile_definitions(mie PUBLIC MIE_MAX_CANDIDATES=${MIE_MAX_CANDIDATES})
+endif()
+if(NOT MIE_LRU_CAP STREQUAL "")
+    target_compile_definitions(mie PUBLIC MIE_LRU_CAP=${MIE_LRU_CAP})
+endif()
+
+# Host-only targets (REPL, unit tests, data pipeline). On by default only
+# when libmie is the top-level project of a native build; a parent project
+# that pulls libmie in with add_subdirectory() for a host build (e.g. a JNI
+# test harness) gets just the `mie` library, and no GoogleTest download.
+# Cross builds (Pico SDK, Android NDK) never build these targets.
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR AND NOT CMAKE_CROSSCOMPILING)
+    set(_mie_host_tools_default ON)
+else()
+    set(_mie_host_tools_default OFF)
+endif()
+option(MIE_BUILD_HOST_TOOLS
+       "Build mie_repl, the unit tests and the data-pipeline targets"
+       ${_mie_host_tools_default})
+
+if(MIE_BUILD_HOST_TOOLS AND NOT CMAKE_CROSSCOMPILING)
     add_executable(mie_repl
         tools/mie_repl.cpp
         hal/pc/hal_pc_stdin.cpp
@@ -76,7 +112,7 @@ endif()
 # Download data sources first (requires internet, run once):
 #   cmake --build build/mie-host --target mie_fetch_data
 
-if(NOT CMAKE_CROSSCOMPILING)
+if(MIE_BUILD_HOST_TOOLS AND NOT CMAKE_CROSSCOMPILING)
     find_package(Python3 QUIET COMPONENTS Interpreter)
 
     if(Python3_FOUND)
@@ -282,4 +318,4 @@ if(NOT CMAKE_CROSSCOMPILING)
             COMMENT "Build MIE data assets (alias for mie_data_sm)")
 
     endif() # Python3_FOUND
-endif() # NOT CMAKE_CROSSCOMPILING
+endif() # MIE_BUILD_HOST_TOOLS AND NOT CMAKE_CROSSCOMPILING

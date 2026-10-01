@@ -7,6 +7,16 @@
 
 namespace mie {
 
+// Out-of-class definitions of the static constexpr members. C++11/14 need
+// them whenever a member is ODR-used (bound to a const&, e.g. by EXPECT_EQ or
+// std::min); C++17 makes such members implicitly inline and deprecates the
+// redundant redeclaration, so only emit them before C++17.
+#if __cplusplus < 201703L
+constexpr int      LruCache::kCap;
+constexpr int      LruCache::kHeaderSize;
+constexpr uint16_t LruCache::kSerialVersion;
+#endif
+
 namespace {
 
 constexpr uint8_t kHintAny = 0xFF;

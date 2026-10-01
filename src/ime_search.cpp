@@ -113,8 +113,8 @@ void ImeLogic::run_search_v2_legacy() {
 
     // Pick the active searcher for this mode.
     TrieSearcher* searcher = nullptr;
-    if (mode_ == InputMode::SmartZh && zh_searcher_.is_loaded()) {
-        searcher = &zh_searcher_;
+    if (mode_ == InputMode::SmartZh && zh_searcher_ && zh_searcher_->is_loaded()) {
+        searcher = zh_searcher_;
     } else if (mode_ == InputMode::SmartEn && en_searcher_ && en_searcher_->is_loaded()) {
         searcher = en_searcher_;
     }

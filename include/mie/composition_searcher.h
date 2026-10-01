@@ -122,6 +122,17 @@ public:
     /// arguments are silently ignored.
     bool has_phoneme_pos() const { return has_phoneme_pos_; }
 
+    /// Locate the embedded SmartEn dictionary (header fields 0x30..0x3F,
+    /// MIED v2 dat/val sections). Returns true and fills all four outputs
+    /// when the loaded dict carries both sections and they lie inside the
+    /// buffer; returns false (outputs untouched) for dicts built without
+    /// English (zero fields, or a 0x30-byte header from before the field
+    /// was added). The pointers alias this searcher's buffer, so they stay
+    /// valid while it does. Pass them to TrieSearcher::load_from_memory()
+    /// to get the en_searcher for ImeLogic.
+    bool english_sections(const uint8_t** dat, size_t* dat_size,
+                          const uint8_t** val, size_t* val_size) const;
+
     bool     is_loaded()  const { return loaded_; }
     uint32_t char_count() const { return char_count_; }
     uint32_t word_count() const { return word_count_; }

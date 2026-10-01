@@ -1,0 +1,23 @@
+# Build trees
+/build/
+/build-*/
+/Testing/
+
+# Generated data assets (tools/gen_dict.py, tools/gen_font.py).
+# data/README.md and data/.gitkeep stay tracked.
+/data/*.bin
+/data/*.json
+/data/*.txt
+/data/lg/
+/data/_test/
+
+# Downloaded data sources (tools/fetch_data.py) — third-party, never commit
+/data_sources/
+
+# REPL runtime log
+mie_repl.log
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/

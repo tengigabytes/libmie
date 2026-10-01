@@ -7,8 +7,12 @@
 //   - 0-result fallback chain to adjacent buckets works
 //   - 5+ truncated prefix fallback works
 //   - Optional smoke test against the real 2 MB dict_mie_v4.bin if present
+//   - v4-only ImeLogic constructor (no MIED v2 TrieSearcher)
+//   - CompositionSearcher::english_sections() on embedded SmartEn sections
 //
 // Synthetic v4 blobs are reused from test_composition_searcher.cpp's pattern.
+
+#include "test_helpers.h"   // build_single (MIED v2 EN dict), MockListener, press
 
 #include <gtest/gtest.h>
 #include <mie/composition_searcher.h>
@@ -17,6 +21,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 
@@ -41,6 +46,12 @@ struct TinyV4Builder {
 
     std::vector<CharEntry> chars;
     std::vector<WordEntry> words;
+
+    // Optional embedded SmartEn sections (MIED v2 dat/val). When either is
+    // non-empty the blob gets the 0x40-byte header and both sections are
+    // appended after the word-offsets section.
+    std::vector<uint8_t> en_dat;
+    std::vector<uint8_t> en_val;
 
     std::vector<uint8_t> build() {
         constexpr int kMaxGroup = 8;
@@ -169,14 +180,17 @@ struct TinyV4Builder {
                 key_section.push_back((uint8_t)(cid >> 8));
             }
 
-        constexpr uint32_t kHeaderSize = 0x30;
+        const bool     has_en      = !en_dat.empty() || !en_val.empty();
+        const uint32_t kHeaderSize = has_en ? 0x40 : 0x30;
         uint32_t char_off       = kHeaderSize;
         uint32_t word_off       = char_off + (uint32_t)char_section.size();
         uint32_t first_off      = word_off + (uint32_t)word_section.size();
         uint32_t key_off        = first_off + (uint32_t)first_section.size();
         uint32_t char_offs_off  = key_off + (uint32_t)key_section.size();
         uint32_t word_offs_off  = char_offs_off + (uint32_t)char_offs_section.size();
-        uint32_t total_size     = word_offs_off + (uint32_t)word_offs_section.size();
+        uint32_t en_dat_off     = word_offs_off + (uint32_t)word_offs_section.size();
+        uint32_t en_val_off     = en_dat_off + (uint32_t)en_dat.size();
+        uint32_t total_size     = en_val_off + (uint32_t)en_val.size();
 
         std::vector<uint8_t> header(kHeaderSize, 0);
         std::memcpy(header.data(), "MIE4", 4);
@@ -193,6 +207,14 @@ struct TinyV4Builder {
         std::memcpy(header.data() + 0x20, &total_size, 4);
         std::memcpy(header.data() + 0x24, &char_offs_off, 4);
         std::memcpy(header.data() + 0x28, &word_offs_off, 4);
+        if (has_en) {
+            uint32_t en_dat_n = (uint32_t)en_dat.size();
+            uint32_t en_val_n = (uint32_t)en_val.size();
+            std::memcpy(header.data() + 0x30, &en_dat_off, 4);
+            std::memcpy(header.data() + 0x34, &en_dat_n, 4);
+            std::memcpy(header.data() + 0x38, &en_val_off, 4);
+            std::memcpy(header.data() + 0x3C, &en_val_n, 4);
+        }
 
         std::vector<uint8_t> out;
         out.insert(out.end(), header.begin(), header.end());
@@ -202,6 +224,8 @@ struct TinyV4Builder {
         out.insert(out.end(), key_section.begin(), key_section.end());
         out.insert(out.end(), char_offs_section.begin(), char_offs_section.end());
         out.insert(out.end(), word_offs_section.begin(), word_offs_section.end());
+        out.insert(out.end(), en_dat.begin(), en_dat.end());
+        out.insert(out.end(), en_val.begin(), en_val.end());
         return out;
     }
 };
@@ -309,7 +333,15 @@ TEST(ImeV4Dispatch, ZeroResultFallback_AdjacentBucket) {
 TEST(ImeV4Dispatch, RealDict_SmokeTest) {
     // Load the production v4 dict if it exists. Skip otherwise so the
     // test suite remains portable to CI without the 2 MB asset.
+    // MIE_TEST_DICT_V4 (env) wins; then the standalone libmie layout
+    // (data/ at the repo root), then the MokyaLora layout (firmware/mie/data).
+    const char* env_path = std::getenv("MIE_TEST_DICT_V4");
     const char* paths[] = {
+        (env_path && *env_path) ? env_path : "data/dict_mie_v4.bin",
+        "data/dict_mie_v4.bin",
+        "../data/dict_mie_v4.bin",
+        "../../data/dict_mie_v4.bin",
+        "../../../data/dict_mie_v4.bin",
         "firmware/mie/data/dict_mie_v4.bin",
         "../firmware/mie/data/dict_mie_v4.bin",
         "../../firmware/mie/data/dict_mie_v4.bin",
@@ -355,4 +387,185 @@ TEST(ImeV4Dispatch, RealDict_SmokeTest) {
     // since ㄋ-prefix readings exist for many CJK characters.
     int n1 = cs.search(ks, 1, /*target=*/1, out, 10);
     EXPECT_GT(n1, 0) << "Expected 1-position ㄋ search to return chars from char_table";
+}
+
+// ── v4-only constructor (no MIED v2 TrieSearcher) ────────────────────────
+
+namespace {
+
+// 好 [ㄏ ㄠ ˇ], 人 [ㄖ ㄣ ˊ], 好人 — same fixture as the attach-path test.
+TinyV4Builder hao_ren_builder() {
+    TinyV4Builder b;
+    b.chars.push_back({"好", {make_reading({16, 14, 1}, 3, 1000)}});
+    b.chars.push_back({"人", {make_reading({17, 9, 2}, 2, 900)}});
+    b.words.push_back({{0, 1}, {0, 0}, 750});  // 好人
+    return b;
+}
+
+std::vector<std::string> candidate_words(const mie::ImeLogic& ime) {
+    std::vector<std::string> out;
+    for (int i = 0; i < ime.candidate_count(); ++i) out.push_back(ime.candidate(i).word);
+    return out;
+}
+
+} // namespace
+
+TEST(ImeV4OnlyCtor, SmartZhUsesCompositionSearcher) {
+    auto blob = hao_ren_builder().build();
+    mie::CompositionSearcher cs;
+    ASSERT_TRUE(cs.load_from_memory(blob.data(), blob.size()));
+
+    mie::ImeLogic ime(cs);
+    RecordingListener L;
+    ime.set_listener(&L);
+
+    // ㄏ (slot 16) + ㄖ (slot 17) — 2-position abbrev for 好人.
+    press(ime, MOKYA_KEY_C, 100);
+    press(ime, MOKYA_KEY_B, 110);
+    ASSERT_GE(ime.candidate_count(), 1);
+    EXPECT_STREQ(ime.candidate(0).word, "好人");
+
+    press(ime, MOKYA_KEY_OK, 120);
+    ASSERT_EQ(L.commits.size(), 1u);
+    EXPECT_EQ(L.commits[0], "好人");
+    EXPECT_FALSE(ime.has_pending());
+}
+
+TEST(ImeV4OnlyCtor, MatchesV2CtorPlusAttach) {
+    auto blob = hao_ren_builder().build();
+    mie::CompositionSearcher cs;
+    ASSERT_TRUE(cs.load_from_memory(blob.data(), blob.size()));
+
+    mie::ImeLogic v4_only(cs);
+    mie::TrieSearcher dummy_v2;
+    mie::ImeLogic attached(dummy_v2, nullptr);
+    attached.attach_composition_searcher(&cs);
+
+    const mokya_keycode_t seq[] = {MOKYA_KEY_C, MOKYA_KEY_B, MOKYA_KEY_DEL, MOKYA_KEY_C};
+    uint32_t t = 100;
+    for (mokya_keycode_t kc : seq) {
+        press(v4_only, kc, t);
+        press(attached, kc, t);
+        t += 10;
+        EXPECT_EQ(candidate_words(v4_only), candidate_words(attached));
+        EXPECT_STREQ(v4_only.pending_view().str, attached.pending_view().str);
+    }
+}
+
+TEST(ImeV4OnlyCtor, UnloadedSearcherYieldsNoCandidates) {
+    mie::CompositionSearcher cs;  // never loaded
+    mie::ImeLogic ime(cs);
+    press(ime, MOKYA_KEY_C, 100);
+    EXPECT_TRUE(ime.has_pending());
+    EXPECT_EQ(ime.candidate_count(), 0);
+}
+
+TEST(ImeV4OnlyCtor, DetachingCompositionSearcherIsSafe) {
+    // With no v2 dict behind it, detaching v4 must degrade to "no
+    // candidates", not dereference a missing TrieSearcher.
+    auto blob = hao_ren_builder().build();
+    mie::CompositionSearcher cs;
+    ASSERT_TRUE(cs.load_from_memory(blob.data(), blob.size()));
+
+    mie::ImeLogic ime(cs);
+    ime.attach_composition_searcher(nullptr);
+    press(ime, MOKYA_KEY_C, 100);
+    EXPECT_TRUE(ime.has_pending());
+    EXPECT_EQ(ime.candidate_count(), 0);
+}
+
+TEST(ImeV4OnlyCtor, SmartEnFromEmbeddedEnglishSections) {
+    // "apple" at its full T9 key (see SmartEn tests in test_ime_smart.cpp).
+    std::vector<uint8_t> en_dat, en_val;
+    build_single({ { "\x2B\x2A\x2A\x2F\x27", 5, "apple", 100, 0 } }, en_dat, en_val);
+
+    TinyV4Builder b = hao_ren_builder();
+    b.en_dat = en_dat;
+    b.en_val = en_val;
+    auto blob = b.build();
+
+    mie::CompositionSearcher cs;
+    ASSERT_TRUE(cs.load_from_memory(blob.data(), blob.size()));
+
+    const uint8_t* dat = nullptr;
+    const uint8_t* val = nullptr;
+    size_t dat_n = 0, val_n = 0;
+    ASSERT_TRUE(cs.english_sections(&dat, &dat_n, &val, &val_n));
+    ASSERT_EQ(dat_n, en_dat.size());
+    ASSERT_EQ(val_n, en_val.size());
+    EXPECT_EQ(0, std::memcmp(dat, en_dat.data(), dat_n));
+    EXPECT_EQ(0, std::memcmp(val, en_val.data(), val_n));
+    // Pointers alias the blob (no copy).
+    EXPECT_GE(dat, blob.data());
+    EXPECT_LE(val + val_n, blob.data() + blob.size());
+
+    mie::TrieSearcher en;
+    ASSERT_TRUE(en.load_from_memory(dat, dat_n, val, val_n));
+    mie::ImeLogic ime(cs, &en);
+    MockListener L;
+    ime.set_listener(&L);
+
+    press(ime, MOKYA_KEY_MODE);   // SmartZh -> SmartEn
+    press(ime, MOKYA_KEY_A);
+    press(ime, MOKYA_KEY_O);
+    press(ime, MOKYA_KEY_O);
+    press(ime, MOKYA_KEY_L);
+    press(ime, MOKYA_KEY_E);
+    press(ime, MOKYA_KEY_OK);
+    EXPECT_EQ(L.committed, "Apple");
+
+    press(ime, MOKYA_KEY_MODE);   // SmartEn -> Direct
+    press(ime, MOKYA_KEY_MODE);   // Direct  -> SmartZh
+    ASSERT_EQ(ime.mode(), mie::InputMode::SmartZh);
+    press(ime, MOKYA_KEY_C, 5000);
+    press(ime, MOKYA_KEY_B, 5010);
+    ASSERT_GE(ime.candidate_count(), 1);
+    EXPECT_STREQ(ime.candidate(0).word, "好人");
+}
+
+// ── CompositionSearcher::english_sections() edge cases ──────────────────
+
+TEST(CompositionSearcherEnglish, NotLoaded) {
+    mie::CompositionSearcher cs;
+    const uint8_t* dat = nullptr;
+    size_t dat_n = 0;
+    EXPECT_FALSE(cs.english_sections(&dat, &dat_n, nullptr, nullptr));
+    EXPECT_EQ(dat, nullptr);
+}
+
+TEST(CompositionSearcherEnglish, LegacyHeaderHasNoEnglish) {
+    // 0x30-byte header: char_table starts at 0x30, so bytes 0x30..0x3F are
+    // char data and must not be read as English offsets — even when they
+    // happen to look like valid in-range (offset, size) pairs. Plant such
+    // values there; the header itself still parses.
+    auto blob = hao_ren_builder().build();
+    ASSERT_GT(blob.size(), 0x40u);
+    const uint32_t plausible[4] = {0x10, 4, 0x10, 4};
+    std::memcpy(blob.data() + 0x30, plausible, sizeof(plausible));
+    mie::CompositionSearcher cs;
+    ASSERT_TRUE(cs.load_from_memory(blob.data(), blob.size()));
+    const uint8_t* dat = nullptr;
+    const uint8_t* val = nullptr;
+    size_t dat_n = 0, val_n = 0;
+    EXPECT_FALSE(cs.english_sections(&dat, &dat_n, &val, &val_n));
+}
+
+TEST(CompositionSearcherEnglish, OutOfRangeSectionRejected) {
+    std::vector<uint8_t> en_dat, en_val;
+    build_single({ { "\x2B\x2A\x2A\x2F\x27", 5, "apple", 100, 0 } }, en_dat, en_val);
+    TinyV4Builder b = hao_ren_builder();
+    b.en_dat = en_dat;
+    b.en_val = en_val;
+    auto blob = b.build();
+
+    // Grow en_val_size past the end of the buffer.
+    uint32_t bogus = (uint32_t)blob.size();
+    std::memcpy(blob.data() + 0x3C, &bogus, 4);
+
+    mie::CompositionSearcher cs;
+    ASSERT_TRUE(cs.load_from_memory(blob.data(), blob.size()));
+    const uint8_t* dat = nullptr;
+    const uint8_t* val = nullptr;
+    size_t dat_n = 0, val_n = 0;
+    EXPECT_FALSE(cs.english_sections(&dat, &dat_n, &val, &val_n));
 }

@@ -10,6 +10,19 @@
 
 namespace mie {
 
+// Out-of-class definitions of the static constexpr members. C++11/14 need
+// them whenever a member is ODR-used (bound to a const&, e.g. by EXPECT_EQ or
+// std::min); C++17 makes such members implicitly inline and deprecates the
+// redundant redeclaration, so only emit them before C++17.
+#if __cplusplus < 201703L
+constexpr uint32_t ImeLogic::kMultiTapTimeoutMs;
+constexpr uint32_t ImeLogic::kLongPressMs;
+constexpr int      ImeLogic::kPageSize;
+constexpr int      ImeLogic::kMaxCandidates;
+constexpr int      ImeLogic::kMaxKeySeq;
+constexpr int      ImeLogic::kMaxDisplayBytes;
+#endif
+
 // ── SYM1 long-press symbol picker (Phase 1.4 Task B) ────────────────────
 // 4-column × 4-row grid of common Traditional-Chinese punctuation that the
 // user can't otherwise type from the half-keyboard. Layout (row-major):
@@ -42,8 +55,16 @@ const char* ImeLogic::picker_cell(int idx) const {
 // ── Construction / configuration ─────────────────────────────────────────────
 
 ImeLogic::ImeLogic(TrieSearcher& zh_searcher, TrieSearcher* en_searcher)
-    : zh_searcher_(zh_searcher)
+    : zh_searcher_(&zh_searcher)
     , en_searcher_(en_searcher)
+{
+    // All POD members initialized in-class.
+}
+
+ImeLogic::ImeLogic(CompositionSearcher& zh_v4, TrieSearcher* en_searcher)
+    : zh_searcher_(nullptr)
+    , en_searcher_(en_searcher)
+    , composition_searcher_(&zh_v4)
 {
     // All POD members initialized in-class.
 }
