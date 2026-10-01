@@ -150,7 +150,7 @@ does not download GoogleTest.
 ## Dictionary
 
 ```sh
-python tools/fetch_data.py --data-dir data_sources        # tsi.csv, en_50k.txt, ...
+python tools/fetch_data.py --data-dir data_sources --only tsi.csv en_50k.txt
 python tools/gen_dict.py \
     --libchewing data_sources/tsi.csv \
     --zh-max-abbr-syls 4 \

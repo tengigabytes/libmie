@@ -98,6 +98,9 @@ def parse_args():
                    help=f'Destination directory  [default: {DEFAULT_DATA_DIR}]')
     p.add_argument('--skip-if-exists', action='store_true',
                    help='Skip files that already exist with non-zero size')
+    p.add_argument('--only', nargs='+', metavar='NAME', choices=list(SOURCES),
+                   help='Download only these files (default: all). '
+                        f'Choices: {", ".join(SOURCES)}')
     return p.parse_args()
 
 # ── Main ──────────────────────────────────────────────────────────────────
@@ -110,8 +113,10 @@ def main():
     print(f"Data directory: {data_dir}")
     print()
 
+    selected = {name: SOURCES[name] for name in (args.only or SOURCES)}
+
     errors = []
-    for name, url in SOURCES.items():
+    for name, url in selected.items():
         dest = data_dir / name
         try:
             download(name, url, dest, args.skip_if_exists)
@@ -125,7 +130,7 @@ def main():
               file=sys.stderr)
         sys.exit(1)
     else:
-        print(f"All {len(SOURCES)} files ready in {data_dir}")
+        print(f"All {len(selected)} files ready in {data_dir}")
         print()
         print("Next steps — recommended build (ZH + EN 50k, <4 MB total):")
         print(f"  python gen_dict.py \\")

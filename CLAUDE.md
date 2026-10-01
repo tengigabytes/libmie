@@ -87,7 +87,7 @@ python -m pytest tests/test_gen_dict.py tools/test_pack_dict_blob.py
 Generate the dictionary:
 
 ```sh
-python tools/fetch_data.py --data-dir data_sources
+python tools/fetch_data.py --data-dir data_sources --only tsi.csv en_50k.txt
 python tools/gen_dict.py --libchewing data_sources/tsi.csv --zh-max-abbr-syls 4 \
     --en-wordlist data_sources/en_50k.txt \
     --v4-output data/dict_mie_v4.bin --output-dir /tmp/mie_v2_throwaway
