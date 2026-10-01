@@ -2,7 +2,11 @@
 
 This directory holds compiled binaries that the build/flash flow consumes.
 None of these files are intended to be hand-edited; regenerate via the
-tools in `firmware/mie/tools/`.
+tools in `tools/`. Generated files are gitignored.
+
+In the MokyaLora repository this directory lives at `firmware/mie/data/`;
+`scripts/build_and_flash.sh` and `scripts/ime_text_test.py` below are
+MokyaLora scripts.
 
 ## Active assets (default flash flow)
 
@@ -41,6 +45,6 @@ against the v2 baseline), use `bash scripts/build_and_flash.sh
 --v2-deprecated --dict`. The script will print a loud warning and pause
 3 s before flashing. Do not commit changes that re-enable v2 by default.
 
-The v2 generator path in `firmware/mie/tools/gen_dict.py` (`--output-dir`
+The v2 generator path in `tools/gen_dict.py` (`--output-dir`
 without `--v4-output`) is also kept as archaeology — it still produces
 valid MDBL but is not exercised by the CI / default build flow.
