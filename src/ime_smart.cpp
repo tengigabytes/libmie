@@ -106,6 +106,29 @@ bool ImeLogic::handle_smart(const KeyEvent& ev) {
         // locks the cycle in place — the last cycled phoneme stays in
         // phoneme_hint_ and further long-presses of the same slot start
         // a NEW cycle on a fresh byte.
+        // Explicit phoneme (MOKYA_KEY_FLAG_PHONEME): the producer already
+        // knows which phoneme the user typed, e.g. a full Zhuyin keyboard.
+        // Append one strict byte for it; never cycle a previous byte, so
+        // typing the same phoneme twice yields two bytes.
+        const int explicit_field =
+            (ev.flags & MOKYA_KEY_FLAG_PHONEME_MASK) >> MOKYA_KEY_FLAG_PHONEME_SHIFT;
+        if (mode_ == InputMode::SmartZh && explicit_field > 0) {
+            int p_count = 0;
+            for (int k = 0; k < 3 && e.phonemes[k]; ++k) ++p_count;
+            if (p_count == 0) p_count = 1;
+            int idx = explicit_field - 1;
+            if (idx >= p_count) idx = p_count - 1;
+            if (key_seq_len_ < kMaxKeySeq) {
+                phoneme_hint_[key_seq_len_] = (uint8_t)idx;
+                key_seq_[key_seq_len_++]    = (char)(slot + 0x21);
+                key_seq_[key_seq_len_]      = '\0';
+                lp_cycle_.byte_index = -1;   // lock any long-press cycle
+                run_search();
+                notify_changed();
+            }
+            return true;
+        }
+
         const bool is_long = (mode_ == InputMode::SmartZh) &&
                              (ev.flags & KEY_FLAG_LONG_PRESS);
 

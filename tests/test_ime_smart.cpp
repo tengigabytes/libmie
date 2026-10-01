@@ -150,6 +150,80 @@ TEST(SmartZh, ShortTap_AfterLongLocksCycle) {
     EXPECT_STREQ(pending_str(ime), "ㄅ, ㄆㄊ");
 }
 
+// Explicit phoneme flag (MOKYA_KEY_FLAG_PHONEME): full Zhuyin keyboards.
+static inline mie::KeyEvent phev(mokya_keycode_t kc, int idx, uint32_t now_ms = 0,
+                                 uint8_t extra_flags = 0) {
+    mie::KeyEvent e;
+    e.keycode = kc;
+    e.pressed = true;
+    e.now_ms  = now_ms;
+    e.flags   = (uint8_t)(MOKYA_KEY_FLAG_PHONEME(idx) | extra_flags);
+    return e;
+}
+
+TEST(SmartZh, ExplicitPhoneme_FlagEncoding) {
+    EXPECT_EQ(MOKYA_KEY_FLAG_PHONEME(0), 0x08);
+    EXPECT_EQ(MOKYA_KEY_FLAG_PHONEME(1), 0x10);
+    EXPECT_EQ(MOKYA_KEY_FLAG_PHONEME(2), 0x18);
+    EXPECT_EQ(mie::key_flag_phoneme(1), MOKYA_KEY_FLAG_PHONEME(1));
+    // Does not overlap the existing flags.
+    EXPECT_EQ(MOKYA_KEY_FLAG_PHONEME_MASK & MOKYA_KEY_FLAG_LONG_PRESS, 0);
+    EXPECT_EQ(MOKYA_KEY_FLAG_PHONEME_MASK & MOKYA_KEY_FLAG_HINT_ANY, 0);
+}
+
+TEST(SmartZh, ExplicitPhoneme_SelectsEachPhoneme) {
+    TrieSearcher ts;
+    ImeLogic ime(ts);
+    ime.process_key(phev(MOKYA_KEY_Q, 1, 100));   // ㄊ (secondary)
+    EXPECT_STREQ(pending_str(ime), "ㄊ");
+    ime.process_key(phev(MOKYA_KEY_9, 2, 110));   // ㄦ (tertiary)
+    EXPECT_STREQ(pending_str(ime), "ㄊ, ㄦ");
+    ime.process_key(phev(MOKYA_KEY_1, 0, 120));   // ㄅ (primary)
+    EXPECT_STREQ(pending_str(ime), "ㄊ, ㄦ, ㄅ");
+}
+
+TEST(SmartZh, ExplicitPhoneme_SameKeyAppendsInsteadOfCycling) {
+    // Dachen "q w" types ㄆ then ㄊ on the same half-key: two bytes, unlike
+    // two long presses, which would cycle the first byte.
+    TrieSearcher ts;
+    ImeLogic ime(ts);
+    ime.process_key(phev(MOKYA_KEY_Q, 0, 100));
+    ime.process_key(phev(MOKYA_KEY_Q, 1, 110));
+    EXPECT_STREQ(pending_str(ime), "ㄆ, ㄊ");
+}
+
+TEST(SmartZh, ExplicitPhoneme_OverridesLongPress) {
+    TrieSearcher ts;
+    ImeLogic ime(ts);
+    ime.process_key(phev(MOKYA_KEY_1, 1, 100, MOKYA_KEY_FLAG_LONG_PRESS));
+    ime.process_key(phev(MOKYA_KEY_1, 1, 110, MOKYA_KEY_FLAG_LONG_PRESS));
+    EXPECT_STREQ(pending_str(ime), "ㄉ, ㄉ");
+}
+
+TEST(SmartZh, ExplicitPhoneme_LocksLongPressCycle) {
+    TrieSearcher ts;
+    ImeLogic ime(ts);
+    ime.process_key(lpev(MOKYA_KEY_1, 100));       // ㄅ, cycle open on byte 0
+    ime.process_key(phev(MOKYA_KEY_Q, 0, 150));    // ㄆ, locks the cycle
+    ime.process_key(lpev(MOKYA_KEY_1, 200));       // new byte, not a cycle
+    EXPECT_STREQ(pending_str(ime), "ㄅ, ㄆ, ㄅ");
+}
+
+TEST(SmartZh, ExplicitPhoneme_IndexBeyondCountClamps) {
+    TrieSearcher ts;
+    ImeLogic ime(ts);
+    ime.process_key(phev(MOKYA_KEY_Q, 2, 100));    // slot has 2 phonemes
+    EXPECT_STREQ(pending_str(ime), "ㄊ");
+}
+
+TEST(SmartEn, ExplicitPhonemeFlagIgnored) {
+    TrieSearcher ts;
+    ImeLogic ime(ts);
+    press(ime, MOKYA_KEY_MODE);                    // SmartZh -> SmartEn
+    ime.process_key(phev(MOKYA_KEY_Q, 1, 100));
+    EXPECT_STREQ(pending_str(ime), "q");           // same as a plain tap
+}
+
 TEST(SmartZh, SpaceIdleEmitsHalfWidth) {
     TrieSearcher ts;
     ImeLogic ime(ts);

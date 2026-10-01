@@ -22,7 +22,9 @@ compatibility rules below so changes can flow back to the hardware.
     key: three) Bopomofo symbols; a short tap matches any of them. A long
     press (the event producer sets `MOKYA_KEY_FLAG_LONG_PRESS`) pins the
     first symbol, and further long presses of the same key within 800 ms
-    cycle to the next one.
+    cycle to the next one. Producers that know the exact phoneme (e.g. a
+    full Zhuyin keyboard, where every phoneme has its own key) set
+    `MOKYA_KEY_FLAG_PHONEME(idx)` instead.
     Abbreviated input (initials only) expands to whole words, SPACE marks
     tone 1, and partial commits keep the unmatched tail.
   - **SmartEn (EN)** — dictionary prediction over the two letters printed

@@ -113,13 +113,27 @@ typedef uint8_t mokya_keycode_t;
  * secondary phoneme". Slot 4's tertiary (ㄦ) is reachable only via the  *
  * fuzzy short-tap path.                                                  *
  *                                                                       *
- * Bits 1..5 reserved for future hint flags.                              */
+ * Bit 1 and bit 5 are reserved for future hint flags; bits 3..4 carry     *
+ * an explicit phoneme index (MOKYA_KEY_FLAG_PHONEME, below).             */
 #define MOKYA_KEY_FLAG_LONG_PRESS   ((uint8_t)0x01)
 /* Test/debug only: force the engine to record hint = ANY (0xFF) for this
  * byte. Equivalent to a short tap under the current default semantics —
  * kept as an explicit signal so test scripts can pin the behaviour even
  * if the engine default ever changes. */
 #define MOKYA_KEY_FLAG_HINT_ANY     ((uint8_t)0x04)
+
+/* Explicit phoneme selection (bits 3..4) for producers that know exactly *
+ * which phoneme of a half-key the user meant, e.g. a full Zhuyin         *
+ * (Dachen) keyboard where every phoneme has its own key. The field holds *
+ * phoneme index + 1 (1 = primary, 2 = secondary, 3 = tertiary); 0 means  *
+ * "not specified". When set, a SmartZh slot key appends one strict byte  *
+ * for that phoneme (like a long press, but never cycling the previous    *
+ * byte) and LONG_PRESS is ignored. Other modes ignore the field. An      *
+ * index beyond the key's phoneme count selects its last phoneme.         */
+#define MOKYA_KEY_FLAG_PHONEME_SHIFT 3
+#define MOKYA_KEY_FLAG_PHONEME_MASK ((uint8_t)0x18)
+#define MOKYA_KEY_FLAG_PHONEME(idx) \
+    ((uint8_t)((((idx) + 1) << MOKYA_KEY_FLAG_PHONEME_SHIFT) & MOKYA_KEY_FLAG_PHONEME_MASK))
 
 #ifdef __cplusplus
 } /* extern "C" */
