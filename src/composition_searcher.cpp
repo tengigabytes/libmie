@@ -192,6 +192,30 @@ bool CompositionSearcher::parse_header() {
     return true;
 }
 
+bool CompositionSearcher::english_sections(const uint8_t** dat, size_t* dat_size,
+                                           const uint8_t** val, size_t* val_size) const {
+    // The English fields live at 0x30..0x3F. Dicts built before the header
+    // grew from 0x30 to 0x40 bytes start char_table at 0x30, so those bytes
+    // are char data there, not offsets: only trust them when the first
+    // section starts at or after 0x40.
+    if (!loaded_ || buf_size_ < 0x40) return false;
+    if (load_u32(buf_ + 0x10) < 0x40) return false;
+    uint32_t dat_off = load_u32(buf_ + 0x30);
+    uint32_t dat_n   = load_u32(buf_ + 0x34);
+    uint32_t val_off = load_u32(buf_ + 0x38);
+    uint32_t val_n   = load_u32(buf_ + 0x3C);
+    if (dat_n == 0 || val_n == 0) return false;
+    if ((uint64_t)dat_off + dat_n > buf_size_ ||
+        (uint64_t)val_off + val_n > buf_size_) {
+        return false;
+    }
+    if (dat)      *dat      = buf_ + dat_off;
+    if (dat_size) *dat_size = dat_n;
+    if (val)      *val      = buf_ + val_off;
+    if (val_size) *val_size = val_n;
+    return true;
+}
+
 // ── Char/word data access ─────────────────────────────────────────────────
 const uint8_t* CompositionSearcher::char_data_at(
     uint32_t char_id,

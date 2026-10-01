@@ -149,6 +149,20 @@ public:
     ///                     leaves SmartEn digit multi-tap working.
     explicit ImeLogic(TrieSearcher& zh_searcher, TrieSearcher* en_searcher = nullptr);
 
+    /// v4-only construction: SmartZh is served by a MIE4 v4
+    /// CompositionSearcher and no MIED v2 TrieSearcher is needed.
+    /// Equivalent to the v2 constructor with an unloaded TrieSearcher
+    /// followed by attach_composition_searcher(&zh_v4).
+    ///
+    /// @param zh_v4        Chinese v4 dictionary. Must outlive this
+    ///                     ImeLogic. If it is not loaded, SmartZh yields
+    ///                     no candidates (same as an unloaded v2 dict).
+    /// @param en_searcher  Optional English dictionary, as above. For a v4
+    ///                     dict with embedded English sections, load a
+    ///                     TrieSearcher from
+    ///                     CompositionSearcher::english_sections().
+    explicit ImeLogic(CompositionSearcher& zh_v4, TrieSearcher* en_searcher = nullptr);
+
     /// Attach a MIED v4 CompositionSearcher. When attached AND is_loaded(),
     /// SmartZh's run_search() uses the composition engine (position-based
     /// dispatch + 0-result fallback + 5+ truncated prefix chain) instead of
@@ -309,7 +323,7 @@ private:
     void notify_changed();
 
     // ── State data ───────────────────────────────────────────────────────
-    TrieSearcher&         zh_searcher_;
+    TrieSearcher*         zh_searcher_;   ///< v2 ZH dict; nullptr when built v4-only
     TrieSearcher*         en_searcher_;
     CompositionSearcher*  composition_searcher_ = nullptr;  ///< v4 opt-in (Phase 3)
     IImeListener*         listener_ = nullptr;

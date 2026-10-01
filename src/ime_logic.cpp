@@ -55,8 +55,16 @@ const char* ImeLogic::picker_cell(int idx) const {
 // ── Construction / configuration ─────────────────────────────────────────────
 
 ImeLogic::ImeLogic(TrieSearcher& zh_searcher, TrieSearcher* en_searcher)
-    : zh_searcher_(zh_searcher)
+    : zh_searcher_(&zh_searcher)
     , en_searcher_(en_searcher)
+{
+    // All POD members initialized in-class.
+}
+
+ImeLogic::ImeLogic(CompositionSearcher& zh_v4, TrieSearcher* en_searcher)
+    : zh_searcher_(nullptr)
+    , en_searcher_(en_searcher)
+    , composition_searcher_(&zh_v4)
 {
     // All POD members initialized in-class.
 }
